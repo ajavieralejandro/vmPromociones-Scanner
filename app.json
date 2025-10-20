@@ -19,13 +19,18 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.javier_alejandro.vmScanner"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [  
+    "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
@@ -39,13 +44,23 @@
           }
         }
       ],
-       ["expo-camera", {
-        "cameraPermission": "Necesitamos acceder a la cámara para escanear cupones"
-      }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Necesitamos acceder a la cámara para escanear cupones"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "39f19fd6-9ecf-446e-a52d-bbce8dec2572"
+      }
+    },
+    "owner": "javier_alejandro"
   }
 }

@@ -1,21 +1,10 @@
-import { useNavigation } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 // Logger (ajustá la ruta si hace falta)
-import { apiFetch, DebugBanner } from '../debug/ServerLogger';
-
-// === CONFIG API ===
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'https://surtekbb.com';
-const CLAIM_URL  = (code: string) => `${API_BASE}/api/v1/promotions/qrs/${encodeURIComponent(code)}/claim`;
-const REDEEM_URL = (code: string) => `${API_BASE}/api/v1/promotions/qrs/${encodeURIComponent(code)}/redeem`;
-
-// Headers seguros en RN
-const HEADERS: Record<string, string> = {
-  'Content-Type': 'application/json',
-  Accept: 'application/json',
-};
+import { DebugBanner } from '../debug/ServerLogger';
 
 // ===================
 
@@ -47,64 +36,46 @@ export default function Scanner() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanLock, setScanLock] = useState(false);
   const [loading, setLoading] = useState(false);
-  const navigation = useNavigation<any>();
+  const lockRef = useRef(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (!permission) requestPermission();
   }, [permission, requestPermission]);
 
-  const goResult = useCallback((status: 'ok'|'error', title: string, message: string, details?: any) => {
-    navigation.navigate('ResultadoCanje', { status, title, message, details });
-  }, [navigation]);
+  const handleScan = useCallback(({ data }: { data: string }) => {
+    if (lockRef.current) return;
+    const code = parseCode(data);
+    lockRef.current = true;
+    setScanLock(true);
 
-  // 1) Claim por código → 2) Redeem
-  const claimThenRedeem = useCallback(async (code: string) => {
-    setLoading(true);
-    try {
-      // CLAIM
-      const claimRes = await apiFetch(
-        CLAIM_URL(code),
-        { method: 'POST', headers: HEADERS, body: JSON.stringify({ device: `scanner-${Platform.OS}` }) },
-        { origin: 'claimByCode', notes: `Scanner claim=${code}` }
-      );
-
-      if (!claimRes.ok) {
-        const baseMsg =
-          (claimRes.json && (claimRes.json.message || claimRes.json.error)) ||
-          claimRes.text || '';
-        if (claimRes.status === 404) return goResult('error', 'QR no encontrado', baseMsg || 'No existe ese código.', { status: claimRes.status, body: claimRes.json ?? claimRes.text });
-        if (claimRes.status === 409) return goResult('error', 'QR ya utilizado', baseMsg || 'Este QR fue canjeado previamente.', { status: claimRes.status, body: claimRes.json ?? claimRes.text });
-        return goResult('error', 'No se pudo reservar el QR', baseMsg || 'Intentá nuevamente.', { status: claimRes.status, body: claimRes.json ?? claimRes.text });
-      }
-
-      // REDEEM
-      const redeemRes = await apiFetch(
-        REDEEM_URL(code),
-        { method: 'POST', headers: HEADERS, body: JSON.stringify({ source: 'scanner' }) },
-        { origin: 'redeemQR', notes: `Scanner redeem=${code}` }
-      );
-
-      if (!redeemRes.ok) {
-        const baseMsg =
-          (redeemRes.json && (redeemRes.json.message || redeemRes.json.error)) ||
-          redeemRes.text || '';
-        if (redeemRes.status === 404) return goResult('error', 'QR no encontrado', baseMsg || 'No existe ese código.', { status: redeemRes.status, body: redeemRes.json ?? redeemRes.text });
-        if (redeemRes.status === 409) return goResult('error', 'QR ya utilizado', baseMsg || 'Este QR fue canjeado previamente.', { status: redeemRes.status, body: redeemRes.json ?? redeemRes.text });
-        if (redeemRes.status === 422) return goResult('error', 'QR expirado o sin claim', baseMsg || 'Volvé a reclamarlo e intentá de nuevo.', { status: redeemRes.status, body: redeemRes.json ?? redeemRes.text });
-        return goResult('error', 'Error de canje', baseMsg || `HTTP ${redeemRes.status ?? 'ERR'}`, { status: redeemRes.status, body: redeemRes.json ?? redeemRes.text });
-      }
-
-      // OK
-      const body = redeemRes.json ?? {};
-      const msgOk =
-        body.message ||
-        'El cupón fue marcado como usado.';
-      goResult('ok', 'Canje exitoso', msgOk, body);
-    } finally {
-      setLoading(false);
-      setTimeout(() => setScanLock(false), 600); // des-traba el scanner
+    if (!code) {
+      // si el QR es inválido, mandamos a resultado con error
+      router.replace({
+        pathname: '/resultado-canje',
+        params: {
+          status: 'error',
+          title: 'QR inválido',
+          message: 'No pude extraer un código válido del escaneo.',
+          details: '{}',
+        },
+      });
+      return;
     }
-  }, [goResult]);
+
+    // Paso de confirmación: no canjeamos todavía
+router.replace({ pathname: '/confirmar-canje' as any, params: { code } });
+
+    // soltamos el lock un poco después para evitar rebote al volver
+    setTimeout(() => {
+      lockRef.current = false;
+      setScanLock(false);
+      setLoading(false);
+    }, 800);
+  }, [router]);
+
+  // limpiar lock si se desmonta
+  useEffect(() => () => { lockRef.current = false; }, []);
 
   if (!permission) {
     return (
@@ -129,16 +100,7 @@ export default function Scanner() {
 
       <CameraView
         style={StyleSheet.absoluteFillObject}
-        onBarcodeScanned={({ data }) => {
-          if (scanLock) return;
-          const code = parseCode(data);
-          if (!code) {
-            goResult('error', 'QR inválido', 'No pude extraer un código válido del escaneo.');
-            return;
-          }
-          setScanLock(true);
-          claimThenRedeem(code);
-        }}
+        onBarcodeScanned={scanLock ? undefined : handleScan}
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
       />
 
@@ -157,7 +119,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   overlay: {
     position: 'absolute',
-    bottom: Platform.select({ ios: 28, android: 24, default: 24 }),
+    bottom: Platform.select({ ios: 28, android: 24, default: 24 }) as number,
     alignSelf: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
