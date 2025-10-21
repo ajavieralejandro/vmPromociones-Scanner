@@ -1,15 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ResultadoCanjeScreen() {
   const router = useRouter();
-  const { status = 'error', title = '', message = '', details = '' } = useLocalSearchParams<{
-    status?: string; title?: string; message?: string; details?: string;
+  const { status = 'error', title = '', message = '' } = useLocalSearchParams<{
+    status?: string; title?: string; message?: string;
   }>();
-
-  let parsed: any = null;
-  try { parsed = details ? JSON.parse(String(details)) : null; } catch {}
 
   const isOk = status === 'ok';
 
@@ -23,13 +20,6 @@ export default function ResultadoCanjeScreen() {
           {message || (isOk ? 'El cupón fue marcado como usado.' : 'Reintentalo más tarde.')}
         </Text>
       </View>
-
-      {parsed ? (
-        <ScrollView style={styles.detailsBox}>
-          <Text style={styles.detailsTitle}>Detalles</Text>
-          <Text style={styles.detailsMono}>{JSON.stringify(parsed, null, 2)}</Text>
-        </ScrollView>
-      ) : null}
 
       <View style={styles.actions}>
         <TouchableOpacity onPress={() => router.replace('/(tabs)/scanner')} style={styles.btnPrimary}>
@@ -49,9 +39,6 @@ const styles = StyleSheet.create({
   errText: { color: '#ffc7d1' },
   title: { fontSize: 20, fontWeight: '800', marginBottom: 6 },
   msg: { fontSize: 16 },
-  detailsBox: { flex: 1, backgroundColor: '#0f172a', borderRadius: 12, padding: 12, marginTop: 8 },
-  detailsTitle: { color: '#cbd5e1', fontWeight: '700', marginBottom: 6 },
-  detailsMono: { color: '#e2e8f0', fontFamily: 'monospace', fontSize: 12 },
   actions: { marginTop: 14 },
   btnPrimary: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   btnPrimaryText: { color: '#fff', fontWeight: '800' },

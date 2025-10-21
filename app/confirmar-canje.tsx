@@ -1,13 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { apiFetch, DebugBanner } from './debug/ServerLogger';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // === CONFIG API ===
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'https://surtekbb.com';
 const CLAIM_URL  = (code: string) => `${API_BASE}/api/v1/promotions/qrs/${encodeURIComponent(code)}/claim`;
 const REDEEM_URL = (code: string) => `${API_BASE}/api/v1/promotions/qrs/${encodeURIComponent(code)}/redeem`;
-const INFO_URL   = (code: string) => `${API_BASE}/api/v1/promotions/qrs/${encodeURIComponent(code)}`; // GET sugerido
+const INFO_URL   = (code: string) => `${API_BASE}/api/v1/promotions/qrs/${encodeURIComponent(code)}`;
 
 const HEADERS: Record<string, string> = {
   'Content-Type': 'application/json',
@@ -16,7 +15,7 @@ const HEADERS: Record<string, string> = {
 
 type QrInfo = {
   code?: string;
-  status?: string;          // e.g. 'new' | 'claimed' | 'redeemed' | 'expired'
+  status?: string;          // 'new' | 'claimed' | 'redeemed' | 'expired' | ...
   expires_at?: string | null;
   promotion?: {
     id?: number | string;
@@ -33,6 +32,22 @@ type QrInfo = {
   };
   [k: string]: any;
 };
+
+function formatISOToAR(iso?: string | null) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function fetchJson(url: string, init?: RequestInit) {
+  const res = await fetch(url, init);
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch {}
+  return { ok: res.ok, status: res.status, json, text };
+}
 
 export default function ConfirmarCanje() {
   const router = useRouter();
@@ -52,11 +67,7 @@ export default function ConfirmarCanje() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(
-        INFO_URL(code as string),
-        { method: 'GET', headers: HEADERS },
-        { origin: 'qrInfo', notes: `lookup code=${code}` }
-      );
+      const res = await fetchJson(INFO_URL(code as string), { method: 'GET', headers: HEADERS });
       if (!res.ok) {
         const msg = (res.json && (res.json.message || res.json.error)) || res.text || `HTTP ${res.status}`;
         setError(msg || 'No se pudo obtener el detalle del QR.');
@@ -82,36 +93,33 @@ export default function ConfirmarCanje() {
     [router]
   );
 
-  // 1) Claim → 2) Redeem
   const confirmRedeem = useCallback(async () => {
     if (!code) return;
     setSubmitting(true);
     try {
       // CLAIM
-      const claimRes = await apiFetch(
+      const claimRes = await fetchJson(
         CLAIM_URL(code as string),
-        { method: 'POST', headers: HEADERS, body: JSON.stringify({ device: `scanner-${Platform.OS}` }) },
-        { origin: 'claimByCode', notes: `confirm claim=${code}` }
+        { method: 'POST', headers: HEADERS, body: JSON.stringify({ device: `scanner-${Platform.OS}` }) }
       );
       if (!claimRes.ok) {
         const baseMsg = (claimRes.json && (claimRes.json.message || claimRes.json.error)) || claimRes.text || '';
-        if (claimRes.status === 404) return goResult('error', 'QR no encontrado', baseMsg || 'No existe ese código.', { status: claimRes.status, body: claimRes.json ?? claimRes.text });
-        if (claimRes.status === 409) return goResult('error', 'QR ya utilizado', baseMsg || 'Este QR fue canjeado previamente.', { status: claimRes.status, body: claimRes.json ?? claimRes.text });
-        return goResult('error', 'No se pudo reservar el QR', baseMsg || 'Intentá nuevamente.', { status: claimRes.status, body: claimRes.json ?? claimRes.text });
+        if (claimRes.status === 404) return goResult('error', 'QR no encontrado', baseMsg || 'No existe ese código.', claimRes.json ?? claimRes.text);
+        if (claimRes.status === 409) return goResult('error', 'QR ya utilizado', baseMsg || 'Este QR fue canjeado previamente.', claimRes.json ?? claimRes.text);
+        return goResult('error', 'No se pudo reservar el QR', baseMsg || 'Intentá nuevamente.', claimRes.json ?? claimRes.text);
       }
 
       // REDEEM
-      const redeemRes = await apiFetch(
+      const redeemRes = await fetchJson(
         REDEEM_URL(code as string),
-        { method: 'POST', headers: HEADERS, body: JSON.stringify({ source: 'scanner' }) },
-        { origin: 'redeemQR', notes: `confirm redeem=${code}` }
+        { method: 'POST', headers: HEADERS, body: JSON.stringify({ source: 'scanner' }) }
       );
       if (!redeemRes.ok) {
         const baseMsg = (redeemRes.json && (redeemRes.json.message || redeemRes.json.error)) || redeemRes.text || '';
-        if (redeemRes.status === 404) return goResult('error', 'QR no encontrado', baseMsg || 'No existe ese código.', { status: redeemRes.status, body: redeemRes.json ?? redeemRes.text });
-        if (redeemRes.status === 409) return goResult('error', 'QR ya utilizado', baseMsg || 'Este QR fue canjeado previamente.', { status: redeemRes.status, body: redeemRes.json ?? redeemRes.text });
-        if (redeemRes.status === 422) return goResult('error', 'QR expirado o sin claim', baseMsg || 'Volvé a reclamarlo e intentá de nuevo.', { status: redeemRes.status, body: redeemRes.json ?? redeemRes.text });
-        return goResult('error', 'Error de canje', baseMsg || `HTTP ${redeemRes.status ?? 'ERR'}`, { status: redeemRes.status, body: redeemRes.json ?? redeemRes.text });
+        if (redeemRes.status === 404) return goResult('error', 'QR no encontrado', baseMsg || 'No existe ese código.', redeemRes.json ?? redeemRes.text);
+        if (redeemRes.status === 409) return goResult('error', 'QR ya utilizado', baseMsg || 'Este QR fue canjeado previamente.', redeemRes.json ?? redeemRes.text);
+        if (redeemRes.status === 422) return goResult('error', 'QR expirado o sin claim', baseMsg || 'Volvé a reclamarlo e intentá de nuevo.', redeemRes.json ?? redeemRes.text);
+        return goResult('error', 'Error de canje', baseMsg || `HTTP ${redeemRes.status ?? 'ERR'}`, redeemRes.json ?? redeemRes.text);
       }
 
       const body = redeemRes.json ?? {};
@@ -131,8 +139,6 @@ export default function ConfirmarCanje() {
 
   return (
     <View style={styles.container}>
-      {__DEV__ && <DebugBanner autoOpenOnError />}
-
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Confirmar canje</Text>
         <Text style={styles.headerSub}>Código: <Text style={styles.mono}>{String(code)}</Text></Text>
@@ -153,17 +159,11 @@ export default function ConfirmarCanje() {
           </Text>
 
           <View style={styles.kvBox}>
-            <KV k="Estado" v={info?.status ?? '—'} />
+            <KV k="Estado" v={info?.status ? String(info.status) : '—'} />
             {info?.promotion?.points != null && <KV k="Puntos" v={String(info.promotion.points)} />}
             {info?.promotion?.value != null && <KV k="Valor" v={`$ ${info.promotion.value}`} />}
-            {info?.expires_at && <KV k="Vence" v={String(info.expires_at)} />}
+            {info?.expires_at && <KV k="Vence" v={formatISOToAR(info.expires_at)} />}
           </View>
-
-          {/* Dump opcional por si tu API trae otras claves */}
-          <ScrollView style={styles.detailsBox}>
-            <Text style={styles.detailsTitle}>Detalle</Text>
-            <Text style={styles.detailsMono}>{JSON.stringify(info, null, 2)}</Text>
-          </ScrollView>
         </View>
       )}
 
@@ -216,10 +216,6 @@ const styles = StyleSheet.create({
   kv: { flexDirection: 'row', justifyContent: 'space-between' },
   kvK: { color: '#94a3b8' },
   kvV: { color: '#e2e8f0', fontWeight: '700' },
-
-  detailsBox: { maxHeight: 220, backgroundColor: '#0b1220', borderRadius: 12, padding: 12, marginTop: 6 },
-  detailsTitle: { color: '#cbd5e1', fontWeight: '700', marginBottom: 6 },
-  detailsMono: { color: '#e2e8f0', fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }), fontSize: 12 },
 
   actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   btnPrimary: { flex: 1, backgroundColor: '#16a34a', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
