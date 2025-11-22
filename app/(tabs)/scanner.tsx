@@ -3,11 +3,6 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
-// Logger (ajustá la ruta si hace falta)
-import { DebugBanner } from '../debug/ServerLogger';
-
-// ===================
-
 function parseCode(raw?: string | null): string | null {
   if (!raw) return null;
   const s = String(raw).trim();
@@ -50,7 +45,6 @@ export default function Scanner() {
     setScanLock(true);
 
     if (!code) {
-      // si el QR es inválido, mandamos a resultado con error
       router.replace({
         pathname: '/resultado-canje',
         params: {
@@ -63,10 +57,8 @@ export default function Scanner() {
       return;
     }
 
-    // Paso de confirmación: no canjeamos todavía
-router.replace({ pathname: '/confirmar-canje' as any, params: { code } });
+    router.replace({ pathname: '/confirmar-canje' as any, params: { code } });
 
-    // soltamos el lock un poco después para evitar rebote al volver
     setTimeout(() => {
       lockRef.current = false;
       setScanLock(false);
@@ -74,7 +66,6 @@ router.replace({ pathname: '/confirmar-canje' as any, params: { code } });
     }, 800);
   }, [router]);
 
-  // limpiar lock si se desmonta
   useEffect(() => () => { lockRef.current = false; }, []);
 
   if (!permission) {
@@ -96,8 +87,6 @@ router.replace({ pathname: '/confirmar-canje' as any, params: { code } });
 
   return (
     <View style={styles.container}>
-      {__DEV__ && <DebugBanner autoOpenOnError />}
-
       <CameraView
         style={StyleSheet.absoluteFillObject}
         onBarcodeScanned={scanLock ? undefined : handleScan}
