@@ -20,6 +20,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="qr-code" size={size} color={color} />
           ),
+          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>
