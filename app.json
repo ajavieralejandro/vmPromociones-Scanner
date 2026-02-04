@@ -49,9 +49,7 @@
         {
           "cameraPermission": "Necesitamos acceder a la cámara para escanear cupones"
         }
-      ],
-      "expo-barcode-scanner"
-    ],
+      ]    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
