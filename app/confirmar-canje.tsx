@@ -11,6 +11,52 @@ import {
   View,
 } from 'react-native';
 
+// ============================================
+// SAFE DEBUG HELPER
+// ============================================
+const SENSITIVE_KEYS = [
+  'token',
+  'authorization',
+  'password',
+  'dni',
+  'external_user_id',
+  'headers',
+  'body',
+];
+
+function safeDebug(obj: any): string {
+  /**
+   * Deep clones obj and redacts sensitive keys recursively.
+   * Returns JSON.stringify with indentation for readability.
+   */
+  function redact(value: any): any {
+    if (value === null || value === undefined) return value;
+    
+    if (typeof value === 'object') {
+      if (Array.isArray(value)) {
+        return value.map(redact);
+      }
+      
+      const result: any = {};
+      for (const key in value) {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+          const lowerKey = key.toLowerCase();
+          if (SENSITIVE_KEYS.some(sk => lowerKey.includes(sk.toLowerCase()))) {
+            result[key] = '[REDACTED]';
+          } else {
+            result[key] = redact(value[key]);
+          }
+        }
+      }
+      return result;
+    }
+    
+    return value;
+  }
+  
+  return JSON.stringify(redact(obj), null, 2);
+}
+
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'https://surtekbb.com';
 const CLAIM_URL  = (code: string) => `${API_BASE}/api/v1/promotions/qrs/${encodeURIComponent(code)}/claim`;
 const REDEEM_URL = (code: string) => `${API_BASE}/api/v1/promotions/qrs/${encodeURIComponent(code)}/redeem`;
@@ -72,20 +118,23 @@ export default function ConfirmarCanje() {
     setError(null);
 
     try {
-      console.log('[CONFIRMAR CANJE PARAMS]', { code, dni, external_user_id });
+      if (__DEV__) {
+        console.log('[CONFIRMAR CANJE PARAMS]', { code, dni, external_user_id });
+      }
 
       const res = await fetchJson(
         INFO_URL(code as string),
         { method: 'GET', headers: HEADERS }
       );
 
-      console.log('[QR INFO RES]', res.status, res.json);
-
-      setDebug(JSON.stringify({
-        step: 'info',
-        params: { code, dni, external_user_id },
-        res
-      }, null, 2));
+      if (__DEV__) {
+        console.log('[QR INFO RES]', res.status, res.json);
+        setDebug(safeDebug({
+          step: 'info',
+          params: { code, dni, external_user_id },
+          res
+        }));
+      }
 
       if (!res.ok) {
         const msg = (res.json && (res.json.message || res.json.error)) || res.text;
@@ -95,7 +144,9 @@ export default function ConfirmarCanje() {
         setInfo(res.json as QrInfo);
       }
     } catch (e: any) {
-      console.log('[QR INFO ERROR]', e);
+      if (__DEV__) {
+        console.log('[QR INFO ERROR]', e);
+      }
       setError(e?.message ?? 'Error de conexión.');
       setInfo(null);
     } finally {
@@ -141,14 +192,15 @@ export default function ConfirmarCanje() {
         { method: 'POST', headers: HEADERS, body: JSON.stringify(claimBody) }
       );
 
-      console.log('[QR CLAIM RES]', claimRes.status, claimRes.json);
-
-      setDebug(JSON.stringify({
-        step: 'claim',
-        params: { code, dni, external_user_id },
-        bodySent: claimBody,
-        res: claimRes
-      }, null, 2));
+      if (__DEV__) {
+        console.log('[QR CLAIM RES]', claimRes.status, claimRes.json);
+        setDebug(safeDebug({
+          step: 'claim',
+          params: { code, dni, external_user_id },
+          bodySent: claimBody,
+          res: claimRes
+        }));
+      }
 
       if (!claimRes.ok) {
         const msg = (claimRes.json && (claimRes.json.message || claimRes.json.error)) || claimRes.text;
@@ -164,21 +216,24 @@ export default function ConfirmarCanje() {
       if (dni) redeemBody.dni = String(dni);
       if (external_user_id) redeemBody.external_user_id = String(external_user_id);
 
-      console.log('[QR REDEEM BODY]', redeemBody);
+      if (__DEV__) {
+        console.log('[QR REDEEM BODY]', redeemBody);
+      }
 
       const redeemRes = await fetchJson(
         REDEEM_URL(code as string),
         { method: 'POST', headers: HEADERS, body: JSON.stringify(redeemBody) }
       );
 
-      console.log('[QR REDEEM RES]', redeemRes.status, redeemRes.json);
-
-      setDebug(JSON.stringify({
-        step: 'redeem',
-        params: { code, dni, external_user_id },
-        bodySent: redeemBody,
-        res: redeemRes
-      }, null, 2));
+      if (__DEV__) {
+        console.log('[QR REDEEM RES]', redeemRes.status, redeemRes.json);
+        setDebug(safeDebug({
+          step: 'redeem',
+          params: { code, dni, external_user_id },
+          bodySent: redeemBody,
+          res: redeemRes
+        }));
+      }
 
       if (!redeemRes.ok) {
         const msg = (redeemRes.json && (redeemRes.json.message || redeemRes.json.error)) || redeemRes.text;
@@ -193,12 +248,14 @@ export default function ConfirmarCanje() {
 
       goResult('ok', 'Canje exitoso', msgOk, body);
     } catch (err: any) {
-      console.log('[QR REDEEM ERROR]', err);
-      setDebug(JSON.stringify({
-        step: 'exception',
-        error: String(err),
-        params: { code, dni, external_user_id },
-      }, null, 2));
+      if (__DEV__) {
+        console.log('[QR REDEEM ERROR]', err);
+        setDebug(safeDebug({
+          step: 'exception',
+          error: String(err),
+          params: { code, dni, external_user_id },
+        }));
+      }
       goResult('error', 'Sin conexión', err?.message ?? 'No pudimos contactar el servidor.');
     } finally {
       setSubmitting(false);
@@ -257,7 +314,7 @@ export default function ConfirmarCanje() {
           </TouchableOpacity>
         </View>
 
-        {debug && (
+        {__DEV__ && debug && (
           <View style={styles.debugBox}>
             <Text style={styles.debugTitle}>DEBUG API</Text>
             <Text style={styles.debugText}>{debug}</Text>
