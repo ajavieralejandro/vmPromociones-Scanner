@@ -46,6 +46,7 @@ export default function Scanner() {
     const code = parseCode(data);
     lockRef.current = true;
     setScanLock(true);
+    setLoading(true);
 
     if (!code) {
       router.replace({
@@ -73,18 +74,33 @@ export default function Scanner() {
 
   if (!permission) {
     return (
-      <Center>
-        <ActivityIndicator />
-        <Text style={styles.mini}>Pidiendo permiso…</Text>
-      </Center>
+      <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+        <Center>
+          <View style={styles.centerCard}>
+            <ActivityIndicator color="#0f62fe" />
+            <Text style={styles.centerTitle}>Preparando cámara</Text>
+            <Text style={styles.centerSubtitle}>Solicitando permisos del dispositivo.</Text>
+          </View>
+        </Center>
+      </SafeAreaView>
     );
   }
+
   if (!permission.granted) {
     return (
-      <Center>
-        <Text style={styles.title}>Se requiere permiso de cámara</Text>
-        <Text>Tocá “Permitir” en el diálogo del sistema.</Text>
-      </Center>
+      <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+        <Center>
+          <View style={styles.centerCard}>
+            <Text style={styles.centerTitle}>Se requiere acceso a la cámara</Text>
+            <Text style={styles.centerSubtitle}>
+              Permití el acceso para escanear y validar códigos QR.
+            </Text>
+            <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+              <Text style={styles.permissionBtnText}>Solicitar permiso</Text>
+            </TouchableOpacity>
+          </View>
+        </Center>
+      </SafeAreaView>
     );
   }
 
@@ -93,6 +109,7 @@ export default function Scanner() {
       <View style={styles.container}>
         <CameraView
           style={StyleSheet.absoluteFillObject}
+          enableTorch={flash}
           onBarcodeScanned={scanLock ? undefined : handleScan}
           barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         />
@@ -111,9 +128,14 @@ export default function Scanner() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.topInfo} pointerEvents="none">
+          <Text style={styles.topInfoTitle}>Escanear QR</Text>
+          <Text style={styles.topInfoSubtitle}>Apuntá al código del cliente para validar el beneficio.</Text>
+        </View>
+
         <View style={styles.centerOverlay} pointerEvents="none">
           <View style={styles.frame} />
-          <Text style={styles.centerText}>Apuntá al QR</Text>
+          <Text style={styles.centerText}>Alineá el QR dentro del marco</Text>
         </View>
 
         <View style={styles.bottomArea} pointerEvents="box-none">
@@ -121,7 +143,7 @@ export default function Scanner() {
             {loading ? (
               <View style={styles.statusRow}>
                 <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.statusText}>Validando…</Text>
+                <Text style={styles.statusText}>Procesando lectura…</Text>
               </View>
             ) : (
               <Text style={styles.statusText}>Listo para escanear</Text>
@@ -149,6 +171,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 10,
+  },
+  topInfo: {
+    position: 'absolute',
+    top: 64,
+    left: 16,
+    right: 16,
+    zIndex: 8,
+    backgroundColor: 'rgba(15,23,42,0.72)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  topInfoTitle: {
+    color: '#f8fafc',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  topInfoSubtitle: {
+    color: '#cbd5e1',
+    fontSize: 13,
   },
   headerButton: {
     width: 44,
@@ -179,7 +222,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.9)',
+    borderColor: '#bfdbfe',
     backgroundColor: 'transparent',
     marginBottom: 12,
   },
@@ -193,15 +236,47 @@ const styles = StyleSheet.create({
     zIndex: 6,
   },
   statusContainer: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(15,23,42,0.78)',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
+    borderColor: 'rgba(191,219,254,0.5)',
+    borderWidth: 1,
   },
   statusRow: { flexDirection: 'row', alignItems: 'center' },
   statusText: { color: '#fff' },
-  title: { fontSize: 18, fontWeight: '700' },
-  mini: { color: '#94a3b8' },
+  centerCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 18,
+    width: '88%',
+    gap: 8,
+    alignItems: 'center',
+  },
+  centerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  centerSubtitle: {
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  permissionBtn: {
+    marginTop: 8,
+    backgroundColor: '#0f62fe',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  permissionBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });
 
